@@ -1,0 +1,131 @@
+# Using NBA Season data to classify NBA players positions based on their individual career statistics. 
+
+########################
+####DATA DICTIONARY:####
+########################
+
+# Season- Indicates the season the stats were observed in.
+#
+# Player- The first and last name of the player.
+#
+# Pos- The position the player plays. The five main positions are Point Guard
+# (PG), Shooting Guard (SG), Small Forward (SF), Power Forward (PF), Center (C).
+#
+# Age- The age of the player during that season 
+
+# Team- The team the player played for that season.
+#
+# G- The number of games the player played in that season.
+#
+# GS- The number of games the player started in that season.
+#
+# MP- The average minutes played per game that season.
+#
+# FGM- The average field goals (baskets) made per game that season.
+#
+# FGA- The average field goals attempted (how many times they ‘shot’ the ball)
+# per game that season.
+#
+# FG- The percent of shots they made. Calculated by FGM/FGA.
+#
+# X3PM- The average number of three point shots made per game that season
+#
+# X3PA- The average number of three point shots attempted per game that season.
+#
+# X3P- The percent of three pointers made. Calculated by X3PM/X3PA
+#
+# X2PM- The average number of two point shots made per game that season.
+#
+# X2PA- The average number of two point shots attempted per game that season.
+#
+# X2P- The percent of two point shots made. Calculated by X2PM/X2PA.
+#
+# eFG- An advanced metric called effective field goal percentage. This adjusts
+# for the fact that 3 pointers are worth one more point.
+#
+# FTM- The average number of free throws made per game for the season.
+#
+# FTA- The average number of free throws attempted per game for the season.
+#
+# FT- The percent of free throws shots made. Calculated by FTM/FTA.
+#
+# ORB- Average number of offensive rebounds per game that season.
+#
+# DRB- Average number of defensive rebounds per game that season.
+#
+# TRB- Average number of all rebounds per game that season. This is ORB + DRB.
+#
+# AST- Average number of assists per game that season.
+#
+# STL- Average number of steals per game that season.
+#
+# BLK- Average number of blocks per game that season.
+#
+# TOV- Average number of turnovers per game that season.
+#
+# PF- Average number of personal fouls per game that season.
+#
+# PPG- Average number of points scored per game that season.
+#
+# All-Star- Indicator of whether the player was an All-Star that season.
+
+install.packages("tidyverse")
+install.packages("class")
+install.packages("gmodels")
+
+library(tidyverse)
+library(class)
+library(gmodels)
+
+nba <- read.csv("NBAFullData.csv", stringsAsFactors = F)
+
+#creation of new pos variables
+    nba <- nba %>%
+    mutate(new_Pos = ifelse(Pos=="C-PF" | Pos=="C-SF" | Pos=="C", "C",
+                     ifelse(Pos=="PF-C" | Pos=="PF-SF" | Pos=="PF", "PF",
+                     ifelse(Pos=="SF-PF" | Pos=="SF-SG" | Pos=="SF", "SF",
+                     ifelse(Pos=="SG-PF" | Pos=="SG-PG" | Pos=="SG-SF"| Pos=="SG", "SG",
+                     ifelse(Pos=="PG-SF" | Pos=="PG-SG" | Pos=="PG", "PG", NA))))))
+
+# make new_Pos a factor
+    nba$new_Pos <- as.factor(nba$new_Pos)
+
+# Creation of train and test variables:
+    train <- subset(nba, Season < 2017, select = -Season)
+    test <- subset(nba, Season == 2017, select = -Season)
+
+# Creation of train and test outcome labels:
+    train_labels <- subset(nba, Season < 2017)$new_Pos
+    test_labels <- subset(nba, Season == 2017)$new_Pos
+
+# Removal of extra columns
+    train <- train %>% select(-Player, -Pos, -new_Pos, -Age, -Team, -G, -GS, -MP, -All.Star)
+    test <- test %>% select(-Player, -Pos, -new_Pos, -Age, -Team, -G, -GS, -MP, -All.Star)
+
+# Creation of z score standardization function
+    zss <- function(x) {
+      (x - mean(x)) / sd(x)
+    }
+
+# Implementation of z score standardization on test and training data sets
+    train_stan <- train %>%
+      mutate_all(.funs = zss)
+    
+    test_stan <- test %>%
+      mutate_all(.funs = zss)
+
+# Creation of model for prediction
+set.seed(1219)
+new_Pos_pred <- knn(train = train, 
+                     test = test, 
+                       cl = train_labels, 
+                        k = 5)
+
+# Construction of confusion matrix
+CrossTable(x = test_labels, 
+           y = new_Pos_pred,
+           prop.chisq = F)
+
+# Check for the accuracy of the model
+sum(ifelse(test_labels == new_Pos_pred, 1, 0))/length(test_labels)
+
