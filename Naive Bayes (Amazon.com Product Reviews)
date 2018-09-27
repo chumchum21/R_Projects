@@ -1,0 +1,124 @@
+# Naive Bayes Model of amazon.com product reviews to predict 
+# whether a review will be labeled as Helpful or Not Helpful
+
+# Read in data and load packages
+amzn <- read.csv("amazon_reviews.csv")
+
+install.packages("caret")
+install.packages("tidyverse")
+install.packages("tm")
+install.packages("SnowballC")
+install.packages("wordcloud")
+install.packages("RColorBrewer")
+
+library(caret)
+library(tidyverse)
+library(tm)
+library(SnowballC)
+library(wordcloud)
+library(RColorBrewer) 
+
+# Familiarize with data
+head(amzn)
+tail(amzn)
+glimpse(amzn)
+
+# Use the table() function to see the distribution of the values
+
+table(amzn$Label)
+
+prop.table(table(amzn$Label))
+
+# Creation of corpus using VCorpus()
+
+corpus <- VCorpus(VectorSource(amzn$review_text))
+
+# as.character() to view the first review in the corpus
+
+as.character(corpus[[1]])
+
+# Perform following steps using the control argument to the DocumentTermMatrix() function: 
+  # convert text to lowercase, 
+  # remove numbers, 
+  # remove stopwords, 
+  # remove punctuation, 
+  # stem the words, 
+  # remove extra whitespace.
+
+dtm <- DocumentTermMatrix(corpus, control = 
+                            list(tolower = TRUE,
+                                 removeNumbers = TRUE,
+                                 stopwords = TRUE,
+                                 removePunctuation = TRUE,
+                                 stemming = TRUE, 
+                                 stripWhitespace = TRUE))
+
+# View the first review in the corpus after being cleaned to verify cleaning has taken place
+
+inspect(dtm[1,])
+
+# Create testing and training sets by picking the first 75% of the data as training
+# and the remaining 25% as testing.
+
+nrow(dtm)*.75
+
+set.seed(926)
+train_index <- 1:ceiling(nrow(dtm)*.75)
+
+train <- dtm[train_index, ]
+nrow(train)
+test <- dtm[-train_index, ]
+nrow(test)
+
+inspect(train[1,])
+inspect(test[1,])
+
+# Create factor vectors of training and testing labels.
+train_labels <- factor(amzn$Label[train_index])
+test_labels <- factor(amzn$Label[-train_index])
+
+# Create a vector of frequently used words in the training data using findFreqTerms(). Setting it to find words that appear at least 10 times
+
+freq_words <- findFreqTerms(train, 10)
+head(freq_words)
+
+# Use str() to see how many terms are in the vector
+
+str(freq_words)
+ 
+# Create new training and testing vectors consisting of reviews that contain the frequently used words
+
+train_freq <- train[, freq_words]
+test_freq <- test[, freq_words]
+
+# Create a convert_counts function that replaces the count of each word with the text “Yes” if the count is greater than zero, otherwise “No”
+
+convert_counts <- function(x) ifelse(x > 0, "Yes", "No")
+
+# Use apply() with MARGIN = 2 to apply the function to the train and test data
+train_freq<- train_freq %>% apply(MARGIN=2, FUN=convert_counts)
+test_freq <- test_freq %>% apply(MARGIN=2, FUN=convert_counts)
+
+train_freq[1,]
+
+# Use the caret train() function and method = "naive_bayes" to create a classifier with laplace = 1.
+set.seed(926)
+nb_model <- train(y = train_labels,
+                  x = train_freq,
+                  method = "naive_bayes",
+                  tuneGrid = expand.grid(laplace = c(0,1), usekernel = F, adjust = F))
+
+nb_model
+
+# Use the predict() function to create predictions for the test data
+# Use the confusionMatrix() function to build a confusion matrix with the prediction labels and the test labels
+
+confusionMatrix(predict(nb_model, newdata=test_freq), 
+                factor(test_labels))
+
+
+# What is the accuracy of this model on the test set?
+  
+confusionMatrix(predict(nb_model, newdata=test_freq), 
+                factor(test_labels))
+
